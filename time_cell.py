@@ -1,37 +1,31 @@
 #! /usr/bin/python3
 
-from p5 import (
-    rect,
-    fill,
-    no_stroke,
-    run,
-    size,
-    background,
-)
-
+from typing import Tuple
 import pygame
-
-PYGAME = True
-screen = None
 from copy import copy
-width = 1280
-height = 720
+import time
+
+screen = None
+WIDTH = 1280
+HEIGHT = 720
 
 class TimePortal(object):
     def __init__(self, t_enter, t_exit, x1, x2, w):
         self.t_enter = t_enter
 
+def rect(color : Tuple, left : float, top : float, width : float, height : float):
+    py_rect = pygame.Rect(left, top, width, height)
+    pygame.draw.rect(screen, color, py_rect)
+
 
 class CA:
     def __init__(self):
 
-
-        rule_30 = [0, 0, 0, 1, 1, 1, 1, 0]  # An initial rule system
         rule_110 = [0,1,1,0,1,1,1,0]
         self.rules = rule_110  # List that stores the ruleset, i.e. 0,1,1,0,1,1,0,1
         self.scl = 5  # How many pixels wide/high is each cell?
-        self.num_cells = int(width / self.scl)
-        self.num_gens = int(height / self.scl)
+        self.num_cells = int(WIDTH / self.scl)
+        self.num_gens = int(HEIGHT / self.scl)
         self.active_generations = [0]
 
         self.universe = []
@@ -50,13 +44,6 @@ class CA:
     def setRules(self, r):
         self.rules = r
 
-    # # Make a random ruleset
-    # def randomize(self):
-
-    #     # TODO only use Class 4 roles
-    #     for i in range(8):
-    #         self.rules[i] = int(random(2))
-
     # Reset to generation 0
     def restart(self):
         self.universe = []
@@ -68,7 +55,6 @@ class CA:
         self.universe[0][self.num_cells -40 ] = 1
 
     def generate(self):
-
         self.active_generations = [t for t in self.active_generations if t < self.num_gens -1]
 
         for i in range(len(self.active_generations)):
@@ -112,76 +98,34 @@ class CA:
             self.history.add(tuple(portal))
             print("trips: {} history: {}".format(self.trips, len(self.history)))
 
-    def render_pygame(self):
-        t0 = time.time()
+    def render(self):
         for t in self.active_generations:
-            self.render_row_pygame(t)
-            pass
-        t1 = time.time()
+            self.render_row(t)
 
-        # draw exit portal
         red = (255, 0, 0)
         green = (0, 255, 0)
         scl = self.scl
-        pygame.draw.rect(screen, red, pygame.Rect(
-            self.x_exit * scl, self.t_exit * scl, self.w * scl, scl/5))
+
+        # draw exit portal
+        rect(red, self.x_exit * scl, self.t_exit * scl, self.w * scl, scl / 5)
 
         # draw enter portal
-        pygame.draw.rect(screen, green, pygame.Rect(
-            self.x_enter * scl, self.t_enter * scl, self.w * scl, scl/5))
+        rect(green, self.x_enter * scl, self.t_enter * scl, self.w * scl, scl / 5)
 
-        t2 = time.time()
         pygame.display.flip()
-        t3 = time.time()
-        print("rows: {}, portals: {} flip: {}".format(t1 - t0, t2 - t1, t3 - t2))
 
-    def render_row_pygame(self, t):
+    def render_row(self, t):
         scl = self.scl
-        # black out background
         black = (0, 0, 0)
         white = (255, 255, 255)
-        # rect((0, t * scl), scl * self.num_cells, scl)
-        # fill(255)
+
         for i in range(self.num_cells):
             if self.universe[t][i] == 1:
                 color = white
             else:
                 color = black
-            pygame.draw.rect(screen, color, pygame.Rect(
-                i * scl, t * scl, scl, scl))
-            # rect((i * scl, t * scl), scl, scl)
+            rect(color, i * scl, t * scl, scl, scl)
 
-    # This is the easy part, just draw the cells,
-    # fill 255 for '1', fill 0 for'0'
-    def render_p5(self):
-        # for t in range(self.num_gens):
-        t0 = time.time()
-        no_stroke()
-        for t in self.active_generations:
-            self.render_row(t)
-        t1 = time.time()
-
-        # draw exit portal
-        fill(255, 0, 0)
-        scl = self.scl
-        rect((self.x_exit * scl, self.t_exit * scl), self.w * scl, scl/5)
-
-        # draw enter portal
-        fill(0, 255, 0)
-        rect((self.x_enter * scl, (self.t_enter + 1) * scl), self.w * scl, scl/5)
-
-        t2 = time.time()
-        print("rows: {}, portals: {}".format(t1 - t0, t2 - t1))
-
-    def render_row(self, t):
-        scl = self.scl
-        # black out background
-        fill(0)
-        rect((0, t * scl), scl * self.num_cells, scl)
-        fill(255)
-        for i in range(self.num_cells):
-            if self.universe[t][i] == 1:
-                rect((i * scl, t * scl), scl, scl)
 
 
     # Implementing the Wolfram rules
@@ -214,39 +158,23 @@ class CA:
         # else:
         #     return False
 
-import time
 
-def setup():
-    global ca
-    size(width, height)
-    ca = CA()                    # Initialize CA
-    background(0)
+def loop():
+    ca = CA()
+    while True:
+        ca.render()
+        ca.generate()
 
-
-def draw():
-    t0 = time.time()
-    ca.render_p5()      # Draw the CA
-    t1 = time.time()
-    ca.generate()    # Generate the next level
-    t2 = time.time()
-    # print("tr: {}\t tg: {}".format(t1 - t0, t2 - t1))
-
-    # If we're done, clear the screen, pick a new ruleset and restart
-    if ca.finished():
-        background(0)
-        # ca.randomize()
-        ca.restart()
+        # handle user input
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                return
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    return
 
 
 if __name__ == "__main__":
-    if PYGAME:
-        pygame.init()
-        screen = pygame.display.set_mode((width, height))
-
-        ca = CA()
-        while True:
-            ca.render_pygame()
-            ca.generate()
-
-    else:
-        run()
+    pygame.init()
+    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    loop()
