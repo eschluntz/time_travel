@@ -4,32 +4,38 @@ from typing import Tuple
 import pygame
 from copy import copy
 import time
+from collections import namedtuple
+import random
 
 screen = None
 WIDTH = 1280
 HEIGHT = 720
 
-class TimePortal(object):
-    def __init__(self, t_enter, t_exit, x1, x2, w):
-        self.t_enter = t_enter
-
 def rect(color : Tuple, left : float, top : float, width : float, height : float):
     py_rect = pygame.Rect(left, top, width, height)
     pygame.draw.rect(screen, color, py_rect)
 
+Result = namedtuple("Result", "cycle_start cycle_end cycle_length")
 
-class CA:
-    def __init__(self):
-
+class TimeCell:
+    def __init__(self, single_row=True, ratio=.1, center=False):
+        """Class to represent a 1D Cellular Automata, with support for time travel.
+        single_row: bool. only update the earliest timed row. Less pretty but faster.
+        ratio: float. fraction of cells to start alive.
+        center: bool. Just starts with 1 cell in the center"""
         rule_110 = [0,1,1,0,1,1,1,0]
-        self.rules = rule_110  # List that stores the ruleset, i.e. 0,1,1,0,1,1,0,1
+        self.rules = rule_110
         self.scl = 5  # How many pixels wide/high is each cell?
         self.num_cells = int(WIDTH / self.scl)
         self.num_gens = int(HEIGHT / self.scl)
-        self.active_generations = [0]
 
-        self.universe = []
-        self.restart()  # Sets generations to [0], only middle cell to 1
+        self.num_steps = None
+        self.active_generations = None
+        self.universe = None
+        self.restart(ratio, center)  # Sets generations to [0], only middle cell to 1
+
+        self.single_row = single_row
+        self.result = None
 
         # time portal
         self.t_enter = 80
@@ -37,66 +43,106 @@ class CA:
         self.x_enter = int(self.num_cells / 2 + 5)
         self.x_exit = int(self.num_cells / 2 + 5)
         self.w = 32
-        self.history = set()  # store what's gone through portal
+        self.history = {}  # store what's gone through portal
         self.trips = 0
 
-    # Set the rules of the CA
-    def setRules(self, r):
-        self.rules = r
-
-    # Reset to generation 0
-    def restart(self):
+    def restart(self, ratio, center=False):
+        """Resets the universe to time = 0"""
+        self.num_steps = 0
         self.universe = []
         for _ in range(self.num_gens):
             self.universe.append([0] * self.num_cells)
         self.active_generations = [0]
 
         # We arbitrarily start with just the middle cell having a state of "1"
-        self.universe[0][self.num_cells -40 ] = 1
+        if center:
+            self.universe[0][self.num_cells // 2] = 1
+        else:
+            for i in range(self.num_cells):
+                self.universe[0][i] = int(random.random() < ratio)
 
     def generate(self):
+        """Simulates forward all active rows"""
+        # filter out ones that have reached the max age
+        self.num_steps += 1
         self.active_generations = [t for t in self.active_generations if t < self.num_gens -1]
+
+        if self.single_row:
+            # if we're trying to go fast and just detect a time loop, we can throw away anything
+            # after the portal
+            self.active_generations = [min(self.active_generations)]
 
         for i in range(len(self.active_generations)):
             # ASSUMPTION: two active generations are never right next to each other
             t = self.active_generations[i]
-            self.generate_row(t)
             self.active_generations[i] += 1
+            self.generate_row(t)
+            self.check_row_for_portal_and_loops(t)
 
     # The process of creating the new generation
     def generate_row(self, t):
+        """ Generates a single next row of the CA.
+        Edges are treated as constants.
+        t: int, the current time row
+        """
         # First we create an empty array for the new values
         nextgen = [0] * self.num_cells
-        # For every spot, determine new state by examing current state,
-        # and neighbor states
         # Ignore edges that only have one neighor
         for i in range(1, self.num_cells - 1):
-            left = self.universe[t][i - 1]  # Left neighbor state
-            me = self.universe[t][i]  # Current state
-            right = self.universe[t][i + 1]  # Right neighbor state
-            # Compute next generation state based on ruleset
+
+            left, me, right = self.universe[t][i - 1 : i + 2]
             nextgen[i] = self.executeRules(left, me, right)
 
         # Copy the array into universe
-        self.universe[t+1] = copy(nextgen)
+        self.universe[t + 1] = copy(nextgen)
 
-        # did we enter the portal?
+
+    def check_row_for_portal_and_loops(self, t):
+        """Handles copying data back in time if we just entered a portal.
+        Detects if we've sent back exactly the same thing before and records data.
+        t: int: current generation."""
         if t == self.t_enter:
             # reset time
-            self.active_generations.append(self.t_exit)
+            self.active_generations.append(self.t_exit)  # TODO modifying a list while we loop through it is dangerous
 
             # copy the portal back
-            print("debug: {}, {}, {}".format(t, self.x_enter, self.w))
-            portal = copy(self.universe[t+1][self.x_enter : self.x_enter + self.w])
-            self.universe[self.t_exit][self.x_exit : self.x_exit + self.w] = portal
+            portal_contents = copy(self.universe[t+1][self.x_enter : self.x_enter + self.w])
+            self.universe[self.t_exit][self.x_exit : self.x_exit + self.w] = portal_contents
 
             # save
             self.trips += 1
-            t_portal = tuple(portal)
-            if t_portal in self.history:
-                print("time loop!")
-            self.history.add(tuple(portal))
-            print("trips: {} history: {}".format(self.trips, len(self.history)))
+            portal_contents_tup = tuple(portal_contents)
+
+            # check if we've sent back the same thing before
+            if portal_contents_tup in self.history:
+                r = Result(
+                    cycle_start=self.history[portal_contents_tup],
+                    cycle_end=self.trips,
+                    cycle_length=self.trips - self.history[portal_contents_tup],
+                )
+                self.result = r  # this not being None tells us to stop
+
+            self.history[portal_contents_tup] = self.trips
+
+    def gen_until_time_loop(self, max_trips=None, render=False):
+        """Runs generate in a loop until it detects a time loop.
+        max_trips: break if we havenot found a time loop after that many trips.
+        returns: Result object or None"""
+
+        if render:
+            pygame.init()
+            global screen
+            screen = pygame.display.set_mode((WIDTH, HEIGHT))
+
+        self.single_row = True  # speeds things up
+        while self.result is None:
+            if max_trips is not None and self.trips > max_trips:
+                return
+            if render:
+                self.render()
+            self.generate()
+
+        return self.result
 
     def render(self):
         for t in self.active_generations:
@@ -150,20 +196,20 @@ class CA:
             return self.rules[7]
         return 0
 
-    # The CA is done if it reaches the bottom of the screen
-    def finished(self):
-        return False
-        # if (self.num_gens - 1) in self.active_generations:
-        #     return True
-        # else:
-        #     return False
-
 
 def loop():
-    ca = CA()
+    quick = True
+    ca = TimeCell(single_row=quick)
     while True:
         ca.render()
         ca.generate()
+
+        if ca.result is not None:
+            print("Time loop found!")
+            print(ca.result)
+            if quick:
+                return
+        # print("render: {}\t generate: {}".format(t1 - t0, t2 - t1))
 
         # handle user input
         for event in pygame.event.get():
@@ -177,4 +223,5 @@ def loop():
 if __name__ == "__main__":
     pygame.init()
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
+
     loop()
