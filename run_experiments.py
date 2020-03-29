@@ -1,36 +1,42 @@
 #! /usr/bin/python3
 
 import time
+# import pickle
 from multiprocessing import Pool
 
-from time_cell import TimeCell, Result
+from time_cell import TimeCell, Result, Config
 
 
-def run_set(width):
-    n_runs = 100
-    starts = []
-    cycle_lengths = []
-    for i in range(n_runs):
-        ca = TimeCell(ratio=.2)
-        ca.w = width
+def run_set(cfg):
+    n_runs = 5
+    results = []
+    print("Starting run for {}".format(cfg))
+    for _ in range(n_runs):
+        ca = TimeCell(config=cfg, quick_compute=True)
         res = ca.gen_until_time_loop()
+        results.append((cfg,res))
 
-        starts.append(res.cycle_start)
-        cycle_lengths.append(res.cycle_length)
-
-    avg_starts = 1.0 * sum(starts) / n_runs
-    avg_cycles = 1.0 * sum(cycle_lengths) / n_runs
-    return (width, avg_starts, avg_cycles)
+    return results
 
 if __name__ == '__main__':
-    widths = range(15, 36, 5)
-    t0 = time.time()
-    with Pool(8) as p:
-        ress = p.map(run_set, widths)
-    t1 = time.time()
+    experiments = []
 
-    for res in ress:
-        width, avg_starts, avg_cycles = res
-        print("width: {:.2f}\tAve start: {:.1f}\tAve cycle: {:.1f}".format(width, avg_starts, avg_cycles))
+    # rules = list(range(256))
+    rules = [110, 110, 72]
+    ratios = [.1, .5, .9]
+    for rule in rules:
+        for ratio in ratios:
+            cfg = Config(rule=rule, ratio=ratio, t_enter=80, t_exit=40, portal_w=32)
+            experiments.append(cfg)
 
-    print("total time: {}".format(t1 - t0))
+    # with Pool(8) as p:
+    #     results = p.map(run_set, experiments)
+
+    results = []
+    for cfg in experiments:
+        results.append(run_set(cfg))
+
+    print(results)
+    # f_name = "results_{}.p".format(time.time())
+    # with open(f_name, "ab") as f:
+    #     pickle.dump(results, f)

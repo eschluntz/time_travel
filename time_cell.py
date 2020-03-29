@@ -5,6 +5,7 @@ import pygame
 from copy import copy
 import time
 from collections import namedtuple
+import numpy as np
 import random
 
 screen = None
@@ -16,15 +17,22 @@ def rect(color : Tuple, left : float, top : float, width : float, height : float
     pygame.draw.rect(screen, color, py_rect)
 
 Result = namedtuple("Result", "cycle_start cycle_end cycle_length")
+Config = namedtuple("Config", "rule ratio t_enter t_exit portal_w")
+
+def rule_name_to_list(rule_name : int):
+    """Takes in a rule's wolfram name and converts it to the binary list to parse,
+    i.e. 110 -> [0,1,1,0,1,1,1,0]"""
+
+    rule_bin_str = np.binary_repr(rule_name, width=8)
+    return tuple( int(x) for x in rule_bin_str )
 
 class TimeCell:
-    def __init__(self, single_row=True, ratio=.1, center=False):
+    def __init__(self, config=None, quick_compute=True, center=False):
         """Class to represent a 1D Cellular Automata, with support for time travel.
-        single_row: bool. only update the earliest timed row. Less pretty but faster.
-        ratio: float. fraction of cells to start alive.
-        center: bool. Just starts with 1 cell in the center"""
-        rule_110 = [0,1,1,0,1,1,1,0]
-        self.rules = rule_110
+        config: Config object. Controls settings for this run. Default supplied.
+        quick_compute: bool. only update the earliest timed row. Less pretty but faster.
+        center: bool. Just starts with 1 cell in the center. overrides config.ratio."""
+
         self.scl = 5  # How many pixels wide/high is each cell?
         self.num_cells = int(WIDTH / self.scl)
         self.num_gens = int(HEIGHT / self.scl)
@@ -32,17 +40,20 @@ class TimeCell:
         self.num_steps = None
         self.active_generations = None
         self.universe = None
-        self.restart(ratio, center)  # Sets generations to [0], only middle cell to 1
-
-        self.single_row = single_row
+        self.quick_compute = quick_compute
         self.result = None
 
+        # config
+        self.config = config or Config(rule=110, ratio=.2, t_enter=80, t_exit=40, portal_w=32)
+        self.rules = rule_name_to_list(self.config.rule)
+        self.restart(self.config.ratio, center)  # Sets generations to [0], only middle cell to 1
+
         # time portal
-        self.t_enter = 80
-        self.t_exit = 40
+        self.t_enter = self.config.t_enter
+        self.t_exit = self.config.t_exit
         self.x_enter = int(self.num_cells / 2 + 5)
         self.x_exit = int(self.num_cells / 2 + 5)
-        self.w = 32
+        self.w = self.config.portal_w
         self.history = {}  # store what's gone through portal
         self.trips = 0
 
@@ -67,7 +78,7 @@ class TimeCell:
         self.num_steps += 1
         self.active_generations = [t for t in self.active_generations if t < self.num_gens -1]
 
-        if self.single_row:
+        if self.quick_compute:
             # if we're trying to go fast and just detect a time loop, we can throw away anything
             # after the portal
             self.active_generations = [min(self.active_generations)]
@@ -76,10 +87,25 @@ class TimeCell:
             # ASSUMPTION: two active generations are never right next to each other
             t = self.active_generations[i]
             self.active_generations[i] += 1
-            self.generate_row(t)
+            next1 = self.generate_row_np(t)
+            next2 = self.generate_row(t)
+            assert next1 == next2, "not equal! {} vs {}".format(next1, next2)
+            self.universe[t + 1] = copy(next1)
             self.check_row_for_portal_and_loops(t)
 
-    # The process of creating the new generation
+    def generate_row_np(self, t):
+        """Vectorized"""
+        row_l = np.array(self.universe[t][0:-2])
+        row_c = np.array(self.universe[t][1:-1])
+        row_r = np.array(self.universe[t][2:])  # sad syntax
+        # binary_mat = np.array(4,2,1))
+        row_code = 4 * row_l + 2 * row_c + 1 * row_r
+        rules = np.array(self.rules)
+        result = rules[7 - row_code]  # vectorized lookup
+        new_row = copy(self.universe[t + 1])
+        new_row[1:-1] = list(result)
+        return new_row
+
     def generate_row(self, t):
         """ Generates a single next row of the CA.
         Edges are treated as constants.
@@ -94,8 +120,30 @@ class TimeCell:
             nextgen[i] = self.executeRules(left, me, right)
 
         # Copy the array into universe
-        self.universe[t + 1] = copy(nextgen)
+        return nextgen
+        # self.universe[t + 1] = copy(nextgen)
 
+    # Implementing the Wolfram rules
+    # Could be improved and made more concise, but here we can
+    # explicitly see what is going on for each case
+    def executeRules(self, a, b, c):
+        if a == 1 and b == 1 and c == 1:
+            return self.rules[0]
+        if a == 1 and b == 1 and c == 0:
+            return self.rules[1]
+        if a == 1 and b == 0 and c == 1:
+            return self.rules[2]
+        if a == 1 and b == 0 and c == 0:
+            return self.rules[3]
+        if a == 0 and b == 1 and c == 1:
+            return self.rules[4]
+        if a == 0 and b == 1 and c == 0:
+            return self.rules[5]
+        if a == 0 and b == 0 and c == 1:
+            return self.rules[6]
+        if a == 0 and b == 0 and c == 0:
+            return self.rules[7]
+        return 0
 
     def check_row_for_portal_and_loops(self, t):
         """Handles copying data back in time if we just entered a portal.
@@ -124,7 +172,7 @@ class TimeCell:
 
             self.history[portal_contents_tup] = self.trips
 
-    def gen_until_time_loop(self, max_trips=None, render=False):
+    def gen_until_time_loop(self, max_trips=200, render=False):
         """Runs generate in a loop until it detects a time loop.
         max_trips: break if we havenot found a time loop after that many trips.
         returns: Result object or None"""
@@ -134,7 +182,7 @@ class TimeCell:
             global screen
             screen = pygame.display.set_mode((WIDTH, HEIGHT))
 
-        self.single_row = True  # speeds things up
+        self.quick_compute = True  # speeds things up
         while self.result is None:
             if max_trips is not None and self.trips > max_trips:
                 return
@@ -173,33 +221,10 @@ class TimeCell:
             rect(color, i * scl, t * scl, scl, scl)
 
 
-
-    # Implementing the Wolfram rules
-    # Could be improved and made more concise, but here we can
-    # explicitly see what is going on for each case
-    def executeRules(self, a, b, c):
-        if a == 1 and b == 1 and c == 1:
-            return self.rules[0]
-        if a == 1 and b == 1 and c == 0:
-            return self.rules[1]
-        if a == 1 and b == 0 and c == 1:
-            return self.rules[2]
-        if a == 1 and b == 0 and c == 0:
-            return self.rules[3]
-        if a == 0 and b == 1 and c == 1:
-            return self.rules[4]
-        if a == 0 and b == 1 and c == 0:
-            return self.rules[5]
-        if a == 0 and b == 0 and c == 1:
-            return self.rules[6]
-        if a == 0 and b == 0 and c == 0:
-            return self.rules[7]
-        return 0
-
-
 def loop():
-    quick = True
-    ca = TimeCell(single_row=quick)
+    quick = False
+    cfg = Config(rule=30, ratio=.2, t_enter=80, t_exit=40, portal_w=32)
+    ca = TimeCell(config=cfg, quick_compute=quick, center=True)
     while True:
         ca.render()
         ca.generate()
@@ -218,6 +243,33 @@ def loop():
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
                     return
+
+def several_loops():
+    rules = list(range(22, 256))
+    ratios = [.1, .5, .9]
+    for rule in rules:
+        for ratio in ratios:
+            cfg = Config(rule=rule, ratio=ratio, t_enter=80, t_exit=40, portal_w=32)
+            print(cfg)
+            ca = TimeCell(config=cfg, quick_compute=True)
+
+            done_count = 0
+            for i in range(1000):
+                ca.render()
+                ca.generate()
+
+                if ca.result is not None:
+                    done_count += 1
+                    if done_count >= 200:
+                        break
+
+                # handle user input
+                for event in pygame.event.get():
+                    if event.type == pygame.QUIT:
+                        return
+                    if event.type == pygame.KEYDOWN:
+                        if event.key == pygame.K_ESCAPE:
+                            return
 
 
 if __name__ == "__main__":
