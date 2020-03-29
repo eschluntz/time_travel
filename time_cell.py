@@ -24,7 +24,7 @@ def rule_name_to_list(rule_name : int):
     i.e. 110 -> [0,1,1,0,1,1,1,0]"""
 
     rule_bin_str = np.binary_repr(rule_name, width=8)
-    return tuple( int(x) for x in rule_bin_str )
+    return np.array(list( int(x) for x in rule_bin_str ))
 
 class TimeCell:
     def __init__(self, config=None, quick_compute=True, center=False):
@@ -60,17 +60,14 @@ class TimeCell:
     def restart(self, ratio, center=False):
         """Resets the universe to time = 0"""
         self.num_steps = 0
-        self.universe = []
-        for _ in range(self.num_gens):
-            self.universe.append([0] * self.num_cells)
+        self.universe = np.zeros(shape=(self.num_gens, self.num_cells), dtype=np.int8)
         self.active_generations = [0]
 
         # We arbitrarily start with just the middle cell having a state of "1"
         if center:
             self.universe[0][self.num_cells // 2] = 1
         else:
-            for i in range(self.num_cells):
-                self.universe[0][i] = int(random.random() < ratio)
+            self.universe[0] = np.random.rand(self.num_cells) < ratio
 
     def generate(self):
         """Simulates forward all active rows"""
@@ -87,63 +84,20 @@ class TimeCell:
             # ASSUMPTION: two active generations are never right next to each other
             t = self.active_generations[i]
             self.active_generations[i] += 1
-            next1 = self.generate_row_np(t)
-            next2 = self.generate_row(t)
-            assert next1 == next2, "not equal! {} vs {}".format(next1, next2)
-            self.universe[t + 1] = copy(next1)
+            next1 = self.generate_row(t)
+            self.universe[t + 1] = next1
             self.check_row_for_portal_and_loops(t)
 
-    def generate_row_np(self, t):
-        """Vectorized"""
-        row_l = np.array(self.universe[t][0:-2])
-        row_c = np.array(self.universe[t][1:-1])
-        row_r = np.array(self.universe[t][2:])  # sad syntax
-        # binary_mat = np.array(4,2,1))
-        row_code = 4 * row_l + 2 * row_c + 1 * row_r
-        rules = np.array(self.rules)
-        result = rules[7 - row_code]  # vectorized lookup
-        new_row = copy(self.universe[t + 1])
-        new_row[1:-1] = list(result)
-        return new_row
-
     def generate_row(self, t):
-        """ Generates a single next row of the CA.
-        Edges are treated as constants.
-        t: int, the current time row
-        """
-        # First we create an empty array for the new values
-        nextgen = [0] * self.num_cells
-        # Ignore edges that only have one neighor
-        for i in range(1, self.num_cells - 1):
-
-            left, me, right = self.universe[t][i - 1 : i + 2]
-            nextgen[i] = self.executeRules(left, me, right)
-
-        # Copy the array into universe
-        return nextgen
-        # self.universe[t + 1] = copy(nextgen)
-
-    # Implementing the Wolfram rules
-    # Could be improved and made more concise, but here we can
-    # explicitly see what is going on for each case
-    def executeRules(self, a, b, c):
-        if a == 1 and b == 1 and c == 1:
-            return self.rules[0]
-        if a == 1 and b == 1 and c == 0:
-            return self.rules[1]
-        if a == 1 and b == 0 and c == 1:
-            return self.rules[2]
-        if a == 1 and b == 0 and c == 0:
-            return self.rules[3]
-        if a == 0 and b == 1 and c == 1:
-            return self.rules[4]
-        if a == 0 and b == 1 and c == 0:
-            return self.rules[5]
-        if a == 0 and b == 0 and c == 1:
-            return self.rules[6]
-        if a == 0 and b == 0 and c == 0:
-            return self.rules[7]
-        return 0
+        """Vectorized"""
+        row_l = self.universe[t][0:-2]
+        row_c = self.universe[t][1:-1]
+        row_r = self.universe[t][2:]  # sad syntax
+        row_code = 4 * row_l + 2 * row_c + 1 * row_r
+        result = self.rules[7 - row_code]  # vectorized lookup
+        new_row = self.universe[t + 1]
+        new_row[1:-1] = result
+        return new_row
 
     def check_row_for_portal_and_loops(self, t):
         """Handles copying data back in time if we just entered a portal.

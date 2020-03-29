@@ -8,7 +8,7 @@ from time_cell import TimeCell, Result, Config
 
 
 def run_set(cfg):
-    n_runs = 5
+    n_runs = 20
     results = []
     print("Starting run for {}".format(cfg))
     for _ in range(n_runs):
@@ -32,11 +32,13 @@ if __name__ == '__main__':
     # with Pool(8) as p:
     #     results = p.map(run_set, experiments)
 
+    t0 = time.time()
     results = []
     for cfg in experiments:
         results.append(run_set(cfg))
-
-    print(results)
+    t1 = time.time()
+    print(t1 - t0)
+    # print(results)
     # f_name = "results_{}.p".format(time.time())
     # with open(f_name, "ab") as f:
     #     pickle.dump(results, f)
