@@ -1,11 +1,13 @@
 
 ## Project Plan
-<x> Decide on renderer: pygame vs p5.py: pygame
-<X> Given initial conditions, detect time loops / oscillations
-    how many trips until the loop starts?
-    how many trips make up the oscillation loop?
-<x> Write fast-detect mode that skips render and stops once it detects a time loop
-< > Write data collection script to answer early questions
+- [X] Decide on renderer: pygame vs p5.py: pygame
+- [X] Given initial conditions, detect time loops / oscillations
+    - how many trips until the loop starts?
+    - how many trips make up the oscillation loop?
+- [X] Write fast-detect mode that skips render and stops once it detects a time loop
+- [ ] Write data collection script to answer early questions
+    - [x] parallelization
+    - [ ] save data as it goes
 
 ## Open Questions
 1. How often do perfect time loops happen?
@@ -16,6 +18,7 @@
 
 
 ## Installation
-
-sudo apt-get install libglfw3
+```
+sudo apt-get install libglfw3  # for pygame
 sudo pip3 install -r requirements.txt
+```

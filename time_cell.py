@@ -1,16 +1,16 @@
 #! /usr/bin/python3
 
 from typing import Tuple
-import pygame
 from copy import copy
-import time
 from collections import namedtuple
+
+import pygame
 import numpy as np
-import random
 
 screen = None
 WIDTH = 1280
 HEIGHT = 720
+
 
 def rect(color : Tuple, left : float, top : float, width : float, height : float):
     py_rect = pygame.Rect(left, top, width, height)
