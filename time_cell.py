@@ -126,7 +126,7 @@ class TimeCell:
 
             self.history[portal_contents_tup] = self.trips
 
-    def gen_until_time_loop(self, max_trips=200, render=False):
+    def gen_until_time_loop(self, max_trips=400, render=False):
         """Runs generate in a loop until it detects a time loop.
         max_trips: break if we havenot found a time loop after that many trips.
         returns: Result object or None"""
@@ -230,4 +230,4 @@ if __name__ == "__main__":
     pygame.init()
     screen = pygame.display.set_mode((WIDTH, HEIGHT))
 
-    loop()
+    several_loops()
