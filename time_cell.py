@@ -7,14 +7,14 @@ from collections import namedtuple
 import pygame
 import numpy as np
 
-screen = None
+SCREEN = None
 WIDTH = 1280
 HEIGHT = 720
 
 
 def rect(color : Tuple, left : float, top : float, width : float, height : float):
     py_rect = pygame.Rect(left, top, width, height)
-    pygame.draw.rect(screen, color, py_rect)
+    pygame.draw.rect(SCREEN, color, py_rect)
 
 Result = namedtuple("Result", "cycle_start cycle_end cycle_length")
 Config = namedtuple("Config", "rule ratio t_enter t_exit portal_w")
@@ -27,12 +27,12 @@ def rule_name_to_list(rule_name : int):
     return np.array(list( int(x) for x in rule_bin_str ))
 
 class TimeCell:
+    """Class to represent a 1D Cellular Automata, with support for time travel."""
+
     def __init__(self, config=None, quick_compute=True, center=False):
-        """Class to represent a 1D Cellular Automata, with support for time travel.
-        config: Config object. Controls settings for this run. Default supplied.
+        """config: Config object. Controls settings for this run. Default supplied.
         quick_compute: bool. only update the earliest timed row. Less pretty but faster.
         center: bool. Just starts with 1 cell in the center. overrides config.ratio."""
-
         self.scl = 5  # How many pixels wide/high is each cell?
         self.num_cells = int(WIDTH / self.scl)
         self.num_gens = int(HEIGHT / self.scl)
@@ -58,7 +58,7 @@ class TimeCell:
         self.trips = 0
 
     def restart(self, ratio, center=False):
-        """Resets the universe to time = 0"""
+        """Resets the universe to time t = 0"""
         self.num_steps = 0
         self.universe = np.zeros(shape=(self.num_gens, self.num_cells), dtype=np.int8)
         self.active_generations = [0]
@@ -89,7 +89,7 @@ class TimeCell:
             self.check_row_for_portal_and_loops(t)
 
     def generate_row(self, t):
-        """Vectorized"""
+        """Vectorized update of a single row"""
         row_l = self.universe[t][0:-2]
         row_c = self.universe[t][1:-1]
         row_r = self.universe[t][2:]  # sad syntax
@@ -105,7 +105,7 @@ class TimeCell:
         t: int: current generation."""
         if t == self.t_enter:
             # reset time
-            self.active_generations.append(self.t_exit)  # TODO modifying a list while we loop through it is dangerous
+            self.active_generations.append(self.t_exit)
 
             # copy the portal back
             portal_contents = copy(self.universe[t+1][self.x_enter : self.x_enter + self.w])
@@ -133,13 +133,13 @@ class TimeCell:
 
         if render:
             pygame.init()
-            global screen
-            screen = pygame.display.set_mode((WIDTH, HEIGHT))
+            global SCREEN
+            SCREEN = pygame.display.set_mode((WIDTH, HEIGHT))
 
         self.quick_compute = True  # speeds things up
         while self.result is None:
             if max_trips is not None and self.trips > max_trips:
-                return
+                return None
             if render:
                 self.render()
             self.generate()
@@ -147,8 +147,9 @@ class TimeCell:
         return self.result
 
     def render(self):
+        """Draws the CA onto the screen, using pygame"""
         for t in self.active_generations:
-            self.render_row(t)
+            self._render_row(t)
 
         red = (255, 0, 0)
         green = (0, 255, 0)
@@ -162,7 +163,8 @@ class TimeCell:
 
         pygame.display.flip()
 
-    def render_row(self, t):
+    def _render_row(self, t):
+        """Helper function that renders the single row at time t"""
         scl = self.scl
         black = (0, 0, 0)
         white = (255, 255, 255)
@@ -176,6 +178,7 @@ class TimeCell:
 
 
 def loop():
+    """Run a single loop of CA"""
     quick = False
     cfg = Config(rule=30, ratio=.2, t_enter=80, t_exit=40, portal_w=32)
     ca = TimeCell(config=cfg, quick_compute=quick, center=True)
@@ -199,6 +202,7 @@ def loop():
                     return
 
 def several_loops():
+    """Runs several loops of CA with different rules"""
     rules = list(range(22, 256))
     ratios = [.1, .5, .9]
     for rule in rules:
@@ -208,7 +212,7 @@ def several_loops():
             ca = TimeCell(config=cfg, quick_compute=True)
 
             done_count = 0
-            for i in range(1000):
+            for _ in range(1000):
                 ca.render()
                 ca.generate()
 
@@ -228,6 +232,6 @@ def several_loops():
 
 if __name__ == "__main__":
     pygame.init()
-    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    SCREEN = pygame.display.set_mode((WIDTH, HEIGHT))
 
     several_loops()

@@ -4,17 +4,19 @@ import time
 import pickle
 from multiprocessing import Pool
 
-from time_cell import TimeCell, Result, Config
+from time_cell import TimeCell, Config
 
 
 def run_set(cfg):
+    """run a number of sets for a particular config.
+    cfg: Config object represetting settings."""
     n_runs = 5000
     results = []
     print("Starting run for {}".format(cfg))
     for _ in range(n_runs):
         ca = TimeCell(config=cfg, quick_compute=True)
         res = ca.gen_until_time_loop()
-        results.append((cfg,res))
+        results.append((cfg, res))
 
     return results
 
