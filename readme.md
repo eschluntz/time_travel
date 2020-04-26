@@ -5,9 +5,11 @@
     - how many trips until the loop starts?
     - how many trips make up the oscillation loop?
 - [X] Write fast-detect mode that skips render and stops once it detects a time loop
-- [ ] Write data collection script to answer early questions
+- [x] Write data collection script to answer early questions
     - [x] parallelization
-    - [ ] save data as it goes
+    - [x] fancy progress bar
+    - [x] save data as it goes
+    - [x] resume
 
 ## Open Questions
 1. How often do perfect time loops happen?
