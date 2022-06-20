@@ -203,16 +203,16 @@ def loop():
 
 def several_loops():
     """Runs several loops of CA with different rules"""
-    rules = list(range(22, 256))
-    ratios = [.1, .5, .9]
+    rules = [30, 45, 73, 97, 110, 137, 161, 165, 169]
+    ratios = [.5]
     for rule in rules:
         for ratio in ratios:
             cfg = Config(rule=rule, ratio=ratio, t_enter=80, t_exit=40, portal_w=32)
             print(cfg)
-            ca = TimeCell(config=cfg, quick_compute=True)
+            ca = TimeCell(config=cfg, quick_compute=False)
 
             done_count = 0
-            for _ in range(1000):
+            for _ in range(1500):
                 ca.render()
                 ca.generate()
 

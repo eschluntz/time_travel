@@ -8,7 +8,7 @@ from time_cell import TimeCell, Config
 
 
 def single_run(cfg):
-    """run a number of sets for a particular config.
+    """run a set for a particular config.
     cfg: Config object represetting settings."""
     ca = TimeCell(config=cfg, quick_compute=True)
     res = ca.run_until_time_loop()
@@ -58,7 +58,7 @@ def run_job_server(func, experiments, save_file, resume=True, num_experiments=No
 
     with Pool(n_cores) as p:
         for result in tqdm(
-                            p.imap(single_run, experiments_gen),
+                            p.imap(single_run, experiments),
                             total=num_experiments,
                             initial=start_index):
             # write results one at a time to a pickle object, so we never need to store them in mem
@@ -68,20 +68,25 @@ def run_job_server(func, experiments, save_file, resume=True, num_experiments=No
 
 if __name__ == '__main__':
     # build experiments
-    rules = list(range(56))
+    rules = [30, 45, 73, 97, 110, 137, 161, 165, 169]
     ratios = [.1, .5, .9]
-    widths = [36, 37, 38]
-    reps = 10
+    widths = [32, 33, 34, 35, 36, 37]
+    reps = 1500*12
 
     # generate all the experiments to run with a cartesian product generator
     # for very large lists, generators are way faster
     experiments_gen = (Config(rule=rule, ratio=ratio, t_enter=80, t_exit=40, portal_w=width)
+                for _ in range(reps)  # reps as outermost loop to spread out everything
                 for rule in rules
                 for ratio in ratios
-                for width in widths
-                for _ in range(reps))
+                for width in widths)
 
     num_experiments = len(rules) * len(ratios) * len(widths) * reps
 
     # run!
-    run_job_server(single_run, experiments_gen, "results.p", num_experiments=num_experiments)
+    run_job_server(
+        single_run,
+        experiments_gen,
+        "main_rules.p",
+        num_experiments=num_experiments,
+        resume=True)
